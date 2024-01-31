@@ -1,0 +1,233 @@
+
+
+"============================================================================="
+"                                                                             "
+" ______  ______ _______  _____  _     _ _____ _______ _______  ______ __   __"
+"|  ____ |_____/ |_____| |_____] |_____|   |   |______    |    |_____/   \_/  "
+"|_____| |    \_ |     | |       |     | __|__ ______|    |    |    \_    |   "
+"                                                                             "
+"                                                                             "
+"============================================================================="
+
+
+Thank you for installing {{ .Chart.Name }}.
+
+Your release is named {{ .Release.Name }}.
+
+To learn more about the release, try:
+
+  $ helm status {{ .Release.Name }} -n {{ .Release.Namespace }}
+  $ helm get all {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+{{ if eq .Values.global.devMode false }} 
+
+HOW TO:
+
+
+
+RESTART POLICY
+
+restartPolicy - is set to: {{ .Values.restartPolicy }}
+
+To change the restartPolicy while deployed: 
+
+
+HOW TO:
+helm upgrade -i {{ .Release.Name }} --set restartPolicy=Never graphistry-helm/Graphistry-Helm-Chart  -n {{ .Release.Namespace }}
+
+
+
+VERSION
+
+tag - release being deployed is:  {{ .Values.tag }}
+
+To change the tag while deployed set tag to another version that is in your Azure container registry by setting the proper version: 
+
+
+HOW TO:
+
+helm upgrade -i {{ .Release.Name }} --set tag=v2.38.10 graphistry-helm/Graphistry-Helm-Chart -n {{ .Release.Namespace }}
+
+LOAD BALANCER
+ 
+ INGRESS MANAGEMENT ANNOTATIONS - default is set to: {{ .Values.ingress.management.annotations }} can be configured for each major cloud service (aws, azure, gcp)
+in the values.yaml file:
+ingress:
+  management:
+    annotations:
+      #service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+      #cloud.google.com/load-balancer-type: "Internal"
+      #service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+
+ Can change while deployed : 
+
+HOW TO:
+
+ helm upgrade -i {{ .Release.Name }} graphistry-helm/Graphistry-Helm-Chart -n {{ .Release.Namespace }} \
+  --set-string ingress.management.annotations."service\.beta\.kubernetes\.io/azure-load-balancer-internal"="true" 
+
+
+NODE SELECTOR
+
+
+nodeSelector - is set to: {{ .Values.nodeSelector }}
+
+
+
+can change the nodeSelector while deployed:
+
+HOW TO:
+
+1)create a label on the preferred node 
+
+ex:
+kubectl label nodes <node_name> accelerator=nvidia (by default the nodeSelector is accelerator=nvidia)
+
+2) set the nodeSelector while deploying with the label you assigned the node:
+ex:
+
+helm upgrade -i {{ .Release.Name }} graphistry-helm/Graphistry-Helm-Chart -n {{ .Release.Namespace }} \ 
+  --set nodeSelector."accelerator"=nvidia 
+
+can change to any label provided by kubectl describe node <node_name> just follow the format provided.
+
+
+
+
+MULTI NODE - 
+
+multiNode- is set to {{ .Values.multiNode }}
+
+HOW TO:
+
+1)create a label on the preferred node 
+
+ex:
+kubectl label nodes <node_name> accelerator=nvidia (by default the nodeSelector is accelerator=nvidia)
+
+2) set the multiNode flag to true while deploying with the label you assigned the node along with the nodeSelector
+label you assigned.:
+
+ex:
+
+helm upgrade -i {{ .Release.Name }} graphistry-helm/Graphistry-Helm-Chart -n {{ .Release.Namespace }} \ 
+  --set multiNode=true \
+  --set nodeSelector."accelerator"=nvidia  
+
+NOTE:
+azure has a predefined nodelabel for GPUS:  --set nodeSelector."kubernetes\\.azure\\.com/accelerator"=nvidia 
+
+
+
+DEPLOYMENT STRATEGY
+
+rollingUpdate: is set to {{ .Values.rollingUpdate }}
+
+false: sets deployment strategy to Recreate
+true: sets deployment strategy to RollingUpdate
+
+HOW TO:
+
+to change deployment strategy to rollingUpdate while deployed:
+
+ex:
+
+$ helm upgrade -i {{ .Release.Name }} graphistry-helm/Graphistry-Helm-Chart -n {{ .Release.Namespace }} \
+  --set rollingUpdate=true
+
+DOMAIN
+
+domain is set to : {{ .Values.domain }}
+
+HOW TO:
+to change the domain while deployed:
+
+ex: 
+
+  $ helm upgrade -i {{ .Release.Name }} graphistry-helm/Graphistry-Helm-Chart -n {{ .Release.Namespace }} \
+    --set domain=graphistry.com but DNS has to resolve to the IP address of the node and you must own the domain.
+
+{{- if eq .Values.tls true  }}
+ can use  http://nip.io  for wildcard DNS for any address 
+ https://<node_IP>.nip.io
+
+ to visit the deployed application:
+https://{{ .Values.domain }}
+
+{{ if eq .Values.k8sDashboard.enabled true }} 
+
+k8sDashboard - is enabled and set to: 
+readonly: {{ .Values.k8sDashboard.readonly }}
+
+ to visit the deployed dashboard:
+https://{{ .Values.domain }}/k8s/dashboard/
+{{ end }}
+
+
+{{ else }}
+
+ can use  http://nip.io  for wildcard DNS for any address 
+ http://<node_IP>.nip.io
+
+{{ if .Values.domain }}
+ to visit the deployed application:
+http://{{ .Values.domain }}
+{{ else }}
+ to visit the deployed application:
+kubectl get ingress -n {{ .Release.Namespace }}
+{{ end }}
+  
+{{- end }}
+
+
+
+
+
+
+{{ else }}
+
+*** DEV MODE IS {{.Values.global.devMode }} ***
+  
+The cluster is currently running in Developers Mode with only a small number of containers running.
+
+postgres, nexus, nginx, are all running in Developers Mode
+
+HOW TO:
+
+When in developer mode set the Tag in the values.yaml file to the latest version of the developers containers.
+
+Tag: is set to {{ .Values.tag }} for this deployment of development containers.
+
+to set the tag to the latest version of the developers containers while deployed:
+$ helm upgrade -i {{ .Release.Name }} ./charts/graphistry-helm -n {{ .Release.Namespace }} \
+  --set tag={{ .Values.tag }} \ 
+  --values ./charts/graphistry-helm/skinny-values.yaml
+
+
+HOW TO:
+
+check logs: 
+
+1) to get the name of the pod: 
+$ kubectl get pods -n {{ .Release.Namespace }} 
+
+
+2) THEN:
+$ kubectl logs -n graphistry <pod name> -f
+
+HOW TO:
+
+shell into the pod:
+
+1) to get the name of the pod:
+$ kubectl get pods -n {{ .Release.Namespace }} 
+
+2) to get shell in the pod:
+$ kubectl exec -it -n {{ .Release.Namespace }} <pod name> -- /bin/bash
+
+
+
+{{- end }}
+
+
+

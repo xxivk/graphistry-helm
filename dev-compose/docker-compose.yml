@@ -1,0 +1,136 @@
+version: "3.5"
+
+services:
+  helm-docker:
+    build:
+      context: ./scripts
+      dockerfile: ../docker/Dockerfile
+    image: helm-docker
+    volumes:
+      - ../charts/:/charts
+      - ~/.aws:/root/.aws
+      - ~/.kube:/root/.kube
+    command: helm upgrade -i g-chart ./charts/graphistry-helm --values ./charts/values.yaml --set multiNode=${MULTINODE} --set metrics=${GRAFANA} --set tls=${TLS}  --set tag=${APP_TAG} --namespace ${NAMESPACE} --create-namespace   
+    environment:
+      - APP_TAG=${APP_TAG}
+      - TLS=${TLS}
+      - MULTINODE=${MULTINODE}
+      - NAMESPACE=${NAMESPACE}
+      - GRAFANA=${GRAFANA}
+
+  helm-docker-dev:
+    build:
+      context: ./scripts
+      dockerfile: ../docker/Dockerfile
+    image: helm-docker
+    volumes:
+      - ../charts/:/charts
+      - ~/.aws:/root/.aws
+      - ~/.kube:/root/.kube
+    command: helm upgrade -i g-chart ./charts/graphistry-helm --values ./charts/graphistry-helm/overrides/internal/skinny-values.yaml --set multiNode=${MULTINODE} --set tls=${TLS}  --set tag=${APP_TAG}  --namespace ${NAMESPACE} --create-namespace  
+    environment:
+      - APP_TAG=${APP_TAG}
+      - TLS=${TLS}
+      - MULTINODE=${MULTINODE}
+      - NAMESPACE=${NAMESPACE}
+
+  cluster-setup:
+    image: helm-docker
+    command: bash ./setup_deploy.sh
+    volumes:
+      - ~/.aws:/root/.aws
+      - ~/.kube:/root/.kube
+    environment:
+      - MULTINODE=${MULTINODE}
+      - TLS=${TLS}
+      - APP_TAG=${APP_TAG}
+      - GRAFANA=${GRAFANA}
+
+  graphistry-resources:
+    image: helm-docker
+    command: helm upgrade -i g-chart-resources ./charts/graphistry-helm-resources --values ./charts/values.yaml --set global.multiNode=${MULTINODE} --namespace ${NAMESPACE} --create-namespace   
+    volumes:
+      - ~/.aws:/root/.aws
+      - ~/.kube:/root/.kube
+    environment:
+      - MULTINODE=${MULTINODE}
+
+
+  launch-grafana:
+    build:
+      context: ./scripts
+      dockerfile: ../docker/Dockerfile
+    image: helm-docker
+    volumes:
+      - ../charts/:/charts
+      - ~/.aws:/root/.aws
+      - ~/.kube:/root/.kube
+    command: helm upgrade -i prometheus-community kube-prometheus-stack --repo https://prometheus-community.github.io/helm-charts --set grafana."grafana\.ini".server.domain="$(yq e ".domain" ./charts/graphistry-helm/overrides/plugins/eks-dev-values.yaml)" --set grafana."grafana\.ini".server.root_url="https://$(yq e ".domain" ./charts/graphistry-helm/overrides/internal/eks-dev-values.yaml)/k8s/grafana" --set grafana."grafana\.ini".server.serve_from_sub_path=true --set grafana."grafana\.ini"."auth\.anonymous".enabled=true --set prometheus.prometheusSpec.podMonitorSelectorNilUsesHelmValues=false --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false --namespace prometheus-community --create-namespace
+
+  deploy-argo:
+    build:
+      context: ./scripts
+      dockerfile: ../docker/Dockerfile
+    image: helm-docker
+    volumes:
+      - ../charts/:/charts
+      - ~/.aws:/root/.aws
+      - ~/.kube:/root/.kube
+    command: helm upgrade -i argo-cd --repo https://argoproj.github.io/argo-helm --values ./charts/argo-cd/values.yaml  --namespace argo --create-namespace && helm template ./charts/argo-cd/apps/ | kubectl apply -f - 
+
+
+  launch-cluster-with-argo:
+    build:
+      context: ./scripts
+      dockerfile: ../docker/Dockerfile
+    image: helm-docker
+    volumes:
+      - ../charts/:/charts
+      - ~/.aws:/root/.aws
+      - ~/.kube:/root/.kube
+    command: helm template ./charts/argo-cd/apps/ | kubectl apply -f - 
+
+
+
+  aws-setup:
+    image: helm-docker
+    command: bash ./copy-aws-creds.sh
+    volumes:
+      - ~/.aws:/root/.aws
+      - ~/.kube:/root/.kube
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_ROLE_ARN=${AWS_ROLE_ARN}
+      - SOURCE_PROFILE=${SOURCE_PROFILE}
+      - CLUSTER_NAME=${CLUSTER_NAME}
+
+  make-cluster-secrets:
+    image: helm-docker
+    command: bash ./make_secret.sh
+    volumes:
+      - ../charts/:/charts
+      - ~/.aws:/root/.aws
+      - ~/.kube:/root/.kube
+    environment:
+      - CONTAINER_REGISTRY_NAME=${CONTAINER_REGISTRY_NAME}
+      - DOCKER_USER_NAME=${DOCKER_USER_NAME}
+      - DOCKER_PASSWORD=${DOCKER_PASSWORD}
+      - DOCKER_USER_NAME_PROD=${DOCKER_USER_NAME_PROD}
+      - DOCKER_PASSWORD_PROD=${DOCKER_PASSWORD_PROD}
+      - CLUSTER_NAME=${CLUSTER_NAME}
+      - NAMESPACE=${NAMESPACE}
+
+  scale-to-zero:
+    build:
+      context: ./scripts
+      dockerfile: ../docker/Dockerfile
+    image: helm-docker
+    volumes:
+      - ../charts/:/charts
+      - ~/.aws:/root/.aws
+      - ~/.kube:/root/.kube
+    command: helm delete g-chart -n ${NAMESPACE}
+    environment:
+      - NAMESPACE=${NAMESPACE}
+
